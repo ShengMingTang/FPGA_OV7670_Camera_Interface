@@ -1,11 +1,11 @@
 `timescale 1ns / 1ps
 
 module asyn_fifo
-	#(
-		parameter DATA_WIDTH=8,
-					 FIFO_DEPTH_WIDTH=11  //total depth will then be 2**FIFO_DEPTH_WIDTH
-	)
-	(
+#(
+	parameter DATA_WIDTH=8,
+	FIFO_DEPTH_WIDTH=11  //total depth will then be 2**FIFO_DEPTH_WIDTH
+)
+(
 	input wire rst_n,
 	input wire clk_write,clk_read, //clock input from both domains
 	input wire write,read, 
@@ -13,25 +13,9 @@ module asyn_fifo
 	output wire [DATA_WIDTH-1:0] data_read, //output TO read clock domain
 	output reg full,empty, //full=sync to write domain clk , empty=sync to read domain clk
 	output reg[FIFO_DEPTH_WIDTH-1:0] data_count_w,data_count_r //counts number of data left in fifo memory(sync to either write or read clk)
-    );
+);
 	 
 	 
-	 /*
-	 async_fifo #(.DATA_WIDTH(16),.FIFO_DEPTH_WIDTH(10)) m2 //1024x16 FIFO mem
-	(
-		.rst_n(rst_n),
-		.clk_write(),
-		.clk_read(), //clock input from both domains
-		.write(),
-		.read(), 
-		.data_write(), //input FROM write clock domain
-		.data_read(), //output TO read clock domain
-		.full(),
-		.empty(), //full=sync to write domain clk , empty=sync to read domain clk
-		..data_count_w(),
-		.data_count_r() //counts number of data left in fifo memory(sync to either write or read clk)
-    );
-	 */
 	 
 	 
 	 localparam FIFO_DEPTH=2**FIFO_DEPTH_WIDTH;

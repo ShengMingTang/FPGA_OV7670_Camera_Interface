@@ -407,8 +407,20 @@
 	// 	.RESET(RESET),// IN
 	// 	.LOCKED(LOCKED) // OUT
 	// );
+
+	// ! @@ change to 12MHz to produce 15 fps
 	wire LOCKED;
-	dcm_24MHz m1
+	// dcm_24MHz m1
+   	// (
+	// 	// Clock in ports
+	// 	.clk_in1(clk),      // IN
+	// 	// Clock out ports
+	// 	.clk_out1(cmos_xclk),     // OUT
+	// 	// Status and control signals
+	// 	.reset(~rst_n),// IN
+	// 	.locked(LOCKED) // OUT
+	// );
+	dcm_12MHz m1
    	(
 		// Clock in ports
 		.clk_in1(clk),      // IN

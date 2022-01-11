@@ -54,9 +54,10 @@ module top_module(
 	// @@
 	wire clk_50MHz;
 	wire clk_25MHz;
-	wire [4:0] vga_out_r;
-	wire [5:0] vga_out_g;
-	wire [4:0] vga_out_b;
+    wire clk_24MHz;
+	wire [3:0] vga_out_r;
+	wire [3:0] vga_out_g;
+	wire [3:0] vga_out_b;
 
     // @@ reset
     wire rst_n;
@@ -150,12 +151,22 @@ module top_module(
     );      // OUT
     */
 
-    reg wr_en;
-    reg[15:0] pixel_q;
+    clock_divisor clk_wiz_0_inst(
+      .clk(clk),//clk_100
+	  .clk0(clk_50MHz),
+      .clk1(clk_25MHz),
+      .clk22(clk_22)
+    );
+
+    wire wr_en;
+    wire [15:0] pixel_q;
+    reg vsync_1, vsync_2;
     camera_interface m0 //control logic for retrieving data from camera, storing data to asyn_fifo, and  sending data to sdram
 	(
-		.clk(clk_50HMz), // original clk (50HMz)
-		.clk_100(clk_sdram),
+		.clk(clk_50MHz), // original clk (50HMz)
+		// @@
+        // .clk_100(clk_sdram),
+        .clk_100(clk),
 		.rst_n(rst_n),
 		.key(key),
 		//asyn_fifo IO
@@ -178,37 +189,41 @@ module top_module(
         // @@ added
         ,
         .wr_en(wr_en),
-        .pixel_q(pixel_q)
+        .pixel_q(pixel_q),
+        .vsync_1(vsync_1),
+        .vsync_2(vsync_2)
 	);
 
-    // ! @@
-    reg [16:0] pixel_addr;
-    // 320x240, combinational logic
-    mem_addr_gen mem_addr_gen_inst
-    (
-        .h_cnt(pixel_x),
-        .v_cnt(pixel_y),
-        .pixel_addr(pixel_addr)
-    );
-     
-    // ! @@
+    wire [16:0] pixel_addr;
+    wire [9:0]h_cnt;
+    wire [9:0]v_cnt;
+    wire valid; 
+
+    // ! @@ generate write pixel address
     // generate correct pixel_addr_wr to write
     wire [16:0] pixel_addr_wr;
-    reg [18:0] pixel_addr;
+    //reg [18:0] pixel_addr;
     reg [18:0] pixel_addr_wr_counter, pixel_addr_wr_counter_next;
 
-    always @(posedge wr_en or posedge rst) begin
-        if(rst) begin
+    
+
+    always @(posedge wr_en or posedge rst or posedge vsync_1) begin
+        if(rst || vsync_1) begin
             pixel_addr_wr_counter = 19'b0;
         end
         else begin
             pixel_addr_wr_counter = pixel_addr_wr_counter_next;
         end
     end
-    assign 
+    
+    // localparam WIDTH=660, HEIGHT=490;
+    // @@ small horizontal shift and vertical shift
+    localparam WIDTH=640, HEIGHT=480;
+    // localparam WIDTH=320, HEIGHT=240;
+
     // count in the resolution of 640x480
     always @(*) begin
-        if (pixel_addr_wr_counter == (640*480)-1) begin
+        if (pixel_addr_wr_counter == (WIDTH*HEIGHT)-1) begin
             pixel_addr_wr_counter_next = 19'b0;
         end
         else begin
@@ -217,59 +232,149 @@ module top_module(
     end
     // from 640x480 to 320x240
     assign pixel_addr_wr =  
-        320*(pixel_addr_wr_counter/640) + (pixel_addr_wr_counter%640)/2
-    ;
+        (320*(pixel_addr_wr_counter/WIDTH/2) + (pixel_addr_wr_counter%WIDTH/2)) % 76800;
+    // assign pixel_addr_wr =  
+    //     320*(pixel_addr_wr_counter/WIDTH) + (pixel_addr_wr_counter%WIDTH);
 
-    blk_mem_gen_0 blk_mem_gen_0_inst
+    // reg [9:0] x_cnt, y_cnt;
+    // // reg [9:0] x_cnt_next;
+    // reg [16:0] pixel_addr_wr;
+
+    // always @(*) begin
+    //     if(cmos_vsync) y_cnt = 10'd0;
+    //     else if(cmos_href)begin
+    //         y_cnt = y_cnt + 1;
+    //         if(wr_en) x_cnt = x_cnt + 1'b1;
+    //         else x_cnt = x_cnt;
+    //     end
+    //     else x_cnt = 10'd0;
+    // end
+    // always @(posedge wr_en or negedge cmos_href ) begin
+    //     if(~cmos_href) x_cnt <= 10'd0;
+    //     else x_cnt <= x_cnt + 1'b1;
+    
+    // end
+
+    // always @(*) begin
+    //     if(cmos_href == 1'b0)
+    //         x_cnt_next = 10'd0;
+    //     else
+    //         x_cnt_next = x_cnt + 1'b1;
+    // end
+
+    // always @(posedge cmos_vsync or posedge cmos_href) begin
+    //     if(cmos_vsync) y_cnt <= 10'd0;
+    //     else begin
+    //         y_cnt <= y_cnt + 1'b1;
+    //     end
+    // end
+
+    // always @(*) begin
+    //     pixel_addr_wr = 320*((y_cnt>>1)) + (x_cnt>>1);
+    // end
+
+    // 320x240, combinational logic
+    mem_addr_gen mem_addr_gen_inst
+    (
+        .h_cnt(h_cnt),
+        .v_cnt(v_cnt),
+        .pixel_addr(pixel_addr)
+    );
+    vga_controller ctrl
+    (
+        .pclk(clk_25MHz),
+        .reset(rst),
+        .hsync(vga_out_hs),
+        .vsync(vga_out_vs),
+        .valid(valid),
+        .h_cnt(h_cnt),
+        .v_cnt(v_cnt)
+    );
+
+    wire [3:0] vgaRed;
+    wire [3:0] vgaGreen;
+    wire [3:0] vgaBlue;
+    assign {vga_out_r4, vga_out_g4, vga_out_b4} = (valid==1'b1) ? {vgaRed, vgaGreen, vgaBlue} : 12'h0;
+    
+    // simple dual port
+    blk_mem_gen_0 blk_mem_gen_0_inst 
     (
         // read
-        .clka(clk_25MHz),
-        .wea(1'b0),
-        .addra(pixel_addr),
-        .douta( {vga_out_r4, vga_out_g4, vga_out_b4})
-        // ! @@ write not done
-        .web(1'b1),
-        .addrb(pixel_addr_wr),
-        .dinb(pixel_q),
+        .clkb(clk_25MHz),
+        // .web(1'b0),
+        .addrb(pixel_addr),
+        .doutb( {vgaRed, vgaGreen, vgaBlue}),
+        // .clka(clk_sdram),
+        .clka(clk),
+        // ! @@ write
+        .wea(wr_en 
+            // && ((pixel_addr_wr_counter%WIDTH/2) < 320) 
+            // && ((pixel_addr_wr_counter/WIDTH/2) < 240)
+        ),
+
+        .addra(pixel_addr_wr),
+        //RGB
+        .dina({pixel_q[15:12], pixel_q[10:7], pixel_q[4:1]})
     ); 
 
     // ! @@
     //control logic for retrieving data from sdram, storing data to asyn_fifo, and sending data to vga
-    vga_interface m2
-    (
-		.clk(clk_50MHz), // original clk (50MHz)
-		.rst_n(rst_n),
-		//asyn_fifo IO
-		.empty_fifo(1'b0),
-		.din(pixel),
-		.clk_vga(clk_vga),
-		.rd_en(rd_en),
-		//VGA output
-		.vga_out_r(vga_out_r),
-		.vga_out_g(vga_out_g),
-		.vga_out_b(vga_out_b),
-		.vga_out_vs(vga_out_vs),
-		.vga_out_hs(vga_out_hs),
-		.pixel_x(pixel_x),
-		.pixel_y(pixel_y)
-    );
+    // vga_interface m2
+    // (
+	// 	.clk(clk_50MHz), // original clk (50MHz)
+	// 	.rst_n(rst_n),
+	// 	//asyn_fifo IO
+	// 	.empty_fifo(1'b0),
+	// 	.din({vga_out_r4, vga_out_g4, vga_out_b4}),
+	// 	.clk_vga(clk_vga),
+	// 	.rd_en(rd_en),
+	// 	//VGA output
+	// 	.vga_out_r(vga_out_r),
+	// 	.vga_out_g(vga_out_g),
+	// 	.vga_out_b(vga_out_b),
+	// 	.vga_out_vs(vga_out_vs),
+	// 	.vga_out_hs(vga_out_hs),
+	// 	.pixel_x(pixel_x),
+	// 	.pixel_y(pixel_y)
+    // );
     
     // ! @@ do we need such fast clock
     // use 100MHz is enough ?
+    // dcm_165MHz m3
+	// (
+    //     // Clock in ports
+    //     .clk(clk),      // IN
+    //     // Clock out ports
+    //     .clk_sdram(clk_sdram),     // OUT
+    //     // Status and control signals
+    //     .RESET(RESET),// IN
+    //     .LOCKED(LOCKED) // OUT
+    // );
+
+    wire LOCKED;
     dcm_165MHz m3
 	(
         // Clock in ports
-        .clk(clk),      // IN
+        .clk_in1(clk),      // IN
         // Clock out ports
-        .clk_sdram(clk_sdram),     // OUT
+        .clk_out1(clk_sdram),     // OUT
         // Status and control signals
-        .RESET(RESET),// IN
-        .LOCKED(LOCKED) // OUT
+        .reset(rst),// IN
+        .locked(LOCKED) // OUT
     );
-
     // @@ rgb565 to rgb444
-    assign vga_out_r4 = vga_out_r[4:1];
-	assign vga_out_g4 = vga_out_g[5:2];
-	assign vga_out_b4 = vga_out_b[4:1];
-
+    // assign vga_out_r4 = vga_out_r[4:1];
+	// assign vga_out_g4 = vga_out_g[5:2];
+	// assign vga_out_b4 = vga_out_b[4:1];
+    wire LOCK;
+    dcm_24MHz m4
+	(
+        // Clock in ports
+        .clk_in1(clk_50MHz),      // IN
+        // Clock out ports
+        .clk_out1(clk_24MHz),     // OUT
+        // Status and control signals
+        .reset(rst),// IN
+        .locked(LOCK) // OUT
+    );
 endmodule

@@ -13,11 +13,12 @@
 	inout cmos_sda,cmos_scl, //i2c comm wires
 	output wire cmos_rst_n, cmos_pwdn, cmos_xclk,
 	//Debugging
-	output wire[3:0] led
+	output wire[3:0] led,
 	// ! @@ added
 	output reg wr_en, 
-	output reg[15:0]pixel_q
-
+	output reg[15:0]pixel_q,
+	output reg vsync_1,
+	output reg vsync_2
 );
 	 //FSM state declarations
 	localparam 
@@ -72,7 +73,8 @@
 	wire key0_tick,key1_tick,key2_tick,key3_tick;
 	 
 	//buffer for all inputs coming from the camera
-	reg pclk_1,pclk_2,href_1,href_2,vsync_1,vsync_2;
+	// reg pclk_1,pclk_2,href_1,href_2,vsync_1,vsync_2;
+	reg pclk_1,pclk_2,href_1,href_2;
 
 	 
 	initial begin //collection of all adddresses and values to be written in the camera
@@ -87,6 +89,7 @@
 		message[5]= 16'h11_80; // CLKRC     internal PLL matches input clock
 		message[6]= 16'h0C_00; // COM3,     default settings
 		message[7]= 16'h3E_00; // COM14,    no scaling, normal pclock
+		// message[7]= 16'h3E_10; // COM14,    no scaling, normal pclock
 		message[8]= 16'h04_00; // COM1,     disable CCIR656
 		message[9]= 16'h40_d0; //COM15,     RGB565, full output range
 		message[10]= 16'h3a_04; //TSLB       set correct output data sequence (magic)
@@ -202,7 +205,7 @@
 	 	 
 	 
 	 //FSM next-state logics
-	always @* begin
+	always @(*) begin
 		state_d=state_q;
 		led_d=led_q;
 		start=0;
@@ -390,18 +393,30 @@
 		.scl(cmos_scl),
 		.sda(cmos_sda),
 		.state(state)
+
     ); 
 	 
 	 
+	// dcm_24MHz m1
+   	// (
+	// 	// Clock in ports
+	// 	.clk(clk),      // IN
+	// 	// Clock out ports
+	// 	.cmos_xclk(cmos_xclk),     // OUT
+	// 	// Status and control signals
+	// 	.RESET(RESET),// IN
+	// 	.LOCKED(LOCKED) // OUT
+	// );
+	wire LOCKED;
 	dcm_24MHz m1
    	(
 		// Clock in ports
-		.clk(clk),      // IN
+		.clk_in1(clk),      // IN
 		// Clock out ports
-		.cmos_xclk(cmos_xclk),     // OUT
+		.clk_out1(cmos_xclk),     // OUT
 		// Status and control signals
-		.RESET(RESET),// IN
-		.LOCKED(LOCKED) // OUT
+		.reset(~rst_n),// IN
+		.locked(LOCKED) // OUT
 	);
 	 
 	asyn_fifo #(.DATA_WIDTH(16),.FIFO_DEPTH_WIDTH(10)) m2 //1024x16 FIFO mem

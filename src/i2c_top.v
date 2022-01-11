@@ -88,7 +88,7 @@ module i2c_top //works on both i2c and SCCB mode(no pullups resistors needed)
 	 
 	 
 	 //free-running clk, freq depends on parameter "freq"
-	 always @* begin
+	 always @(*) begin
 		counter_d=counter_q+1;
 		scl_d=scl_q;
 		if(state_q==idle || state_q==starting) scl_d=1'b1;
@@ -100,7 +100,7 @@ module i2c_top //works on both i2c and SCCB mode(no pullups resistors needed)
 	 
 	 
 	 //FSM next-state logic
-	 always @* begin
+	 always @(*) begin
 		state_d=state_q;
 		start_d=start_q;
 		idx_d=idx_q;
